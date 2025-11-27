@@ -3,12 +3,14 @@ import { Post } from "../models/post.model.js";
 const createPost = async (req, res) => {
     try {
         const { name, description, age } = req.body;
-        if (!name || !description || !age) 
+        
+        if (!name || !description || !age)
             return res.status(400).json({ message: "All fields are required" });
-        const newPost = await Post.create({ name, description,  age });
+
+        const newPost = await Post.create({ name, description, age });
         res.status(201).json({
             message: "Post created successfully",
-            newPost: { id: newPost._id, name: newPost.name, description: newPost.description, age: newPost.age }
+            newPost: newPost
         });
     } catch (error) {
         res.status(500).json({ message: "Error creating post", error: error.message });
@@ -28,7 +30,7 @@ const updatePost = async (req, res) => {
     try {
         const { id } = req.params;
         const { name, description, age } = req.body;
-        if(!name || !description || !age) 
+        if (!name || !description || !age)
             return res.status(400).json({ message: "All fields are required" });
 
         const updatedPost = await Post.findByIdAndUpdate(id, { name, description, age }, { new: true });
@@ -50,4 +52,4 @@ const deletePost = async (req, res) => {
         res.status(500).json({ message: "Error deleting post", error: error.message });
     }
 };
-export { createPost, getPosts, updatePost,deletePost};
+export { createPost, getPosts, updatePost, deletePost };

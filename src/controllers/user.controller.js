@@ -1,3 +1,4 @@
+import jwt from "jsonwebtoken";
 import { User } from "../models/usermodel.js";
 import bycrypt from "bcryptjs";
 
@@ -34,8 +35,13 @@ const loginUser = async (req, res) => {
         if (!isMatch) {
             return res.status(400).json({ message: "Invalid credentials" });
         }
-        res.status(200).json({ message: "Login successful", 
-            user: { id: user._id, email: user.email, username: user.name } });
+        //jwt token can be generated here for session management
+        const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '21h' });
+        res.cookie("token", token, { httpOnly: true, secure: true, sameSite: 'None' });
+        
+         res.status(200).json({ message: "Login successful", 
+            user: { id: user._id, email: user.email, username: user.name },token: token });
+
     } catch (error) {
         res.status(500).json({ message: "Internal server error", error: error.message });
     }
