@@ -23,9 +23,12 @@ const userSchema = new Schema({
         lowercase: true,
         validate: [validator.isEmail, "Please provide a valid email address"]
     },
+    balance: {
+        type: Number,
+        required: true,
+        default: 400
+}
 },
-     {
-    timestamps: true
-    }
+    { timestamps: true }
 );
 export const User = mongoose.model('User', userSchema); 
