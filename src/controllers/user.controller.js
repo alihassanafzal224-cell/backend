@@ -62,6 +62,28 @@ const logoutUser = async (req, res) => {
     }
 };
 
+const getUserByEmail = async (req,res) => {
+    try{
+    const {email} = req.body;
+    if(!email)
+    {    console.log("User not Found");
+        return res.status(400).json({message:"Email is required"});
+    }
+    const user = await User.aggregate([
+        { $match: { email: email } },
+        { $project: { _id: 1, name: 1, email: 1, balance: 1, createdAt: 1, updatedAt: 1 } }
+    ]);
+    if(!user || user.length === 0){
+        return res.status(404).json({message:"User not found"});
+    }
+    res.status(200).json({message:"User found", user: user[0]});
+
+}catch(error){
+    res.status(500).json({message:"Internal server error", error: error.message});
+}
+
+};
+
 const transferFunds = async (req, res) => {
     const session = await mongoose.startSession();
     try {
@@ -111,4 +133,4 @@ const transferFunds = async (req, res) => {
     }
 };
 
-export { registerUser, loginUser , logoutUser, transferFunds };
+export { registerUser, loginUser , logoutUser, transferFunds , getUserByEmail };

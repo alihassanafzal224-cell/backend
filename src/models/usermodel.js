@@ -20,6 +20,7 @@ const userSchema = new Schema({
         required: true,
         unique: true,
         trim: true,
+        index : true,
         lowercase: true,
         validate: [validator.isEmail, "Please provide a valid email address"]
     },
@@ -31,4 +32,5 @@ const userSchema = new Schema({
 },
     { timestamps: true }
 );
+
 export const User = mongoose.model('User', userSchema); 
