@@ -1,6 +1,6 @@
 const defaultOptions = {
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100 // max requests per window per IP
+  windowMs: 15 * 60 * 1000, 
+  max: 100 
 };
 
 const rateLimiter = (options = {}) => {
