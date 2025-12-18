@@ -8,6 +8,7 @@ import {
     getAllUsers,
     getUserById,
     updateUserById,
+    searchUsers,
 } from "../controllers/user.controller.js";
 
 const router = Router();
@@ -16,6 +17,8 @@ const router = Router();
 router.post("/register", registerUser);
 router.post("/login", loginUser);
 router.post("/logout", logoutUser);
+
+router.get("/search", auth, searchUsers);
 
 router.get("/", auth, getAllUsers);
 router.get("/:id", auth, getUserById);

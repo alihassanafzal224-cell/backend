@@ -10,9 +10,15 @@ import bcrypt from "bcryptjs";
         if (!username || !email || !password) {
             return res.status(400).json({ message: "Username, email and password are required" });
         }
+    const existingUser = await User.findOne({
+      $or: [{ name: username }, { email }]
+    });
 
-        const existingUser = await User.findOne({ email });
-        if (existingUser) return res.status(400).json({ message: "User already exists" });
+    if (existingUser) {
+      return res.status(400).json({
+        message: "Username or email already exists"
+      });
+    }
 
         const hashedPassword = await bcrypt.hash(password, 10);
 
@@ -167,6 +173,32 @@ const updateUserById = async (req, res) => {
         res.status(500).json({ message: "Internal server error", error: error.message });
     }
 };
+const searchUsers = async (req, res) => {
+  try {
+    const { q } = req.query;
+
+    if (!q || q.trim() === "") {
+      return res.status(200).json([]);
+    }
+
+    const users = await User.find(
+      {
+        name: { $regex: q, $options: "i" }, // case-insensitive
+      },
+      { _id: 1, name: 1 } // only required fields
+    ).limit(10);
+
+    res.status(200).json(
+      users.map((u) => ({
+        _id: u._id,
+        username: u.name,
+      }))
+    );
+  } catch (error) {
+    res.status(500).json({ message: "Search failed", error: error.message });
+  }
+};
+
 
 export {
     registerUser,
@@ -176,4 +208,5 @@ export {
     getUserById,
     updateUserById,
     transferFunds,
+    searchUsers
 };
