@@ -53,10 +53,16 @@ import bcrypt from "bcryptjs";
         res.cookie("token", token);
 
         res.status(200).json({
-            message: "Login successful",
-            user: { id: user._id, email: user.email, username: user.name, balance: user.balance },
-            token,
-        });
+  message: "Login successful",
+  user: {
+    _id: user._id,
+    username: user.name,
+    email: user.email,
+    followers: user.followers,
+    following: user.following,
+  },
+});
+
     } catch (error) {
         res.status(500).json({ message: "Internal server error", error: error.message });
     }
@@ -88,18 +94,22 @@ import bcrypt from "bcryptjs";
 
 
  const getUserById = async (req, res) => {
-    try {
-        const { id } = req.params;
-        if (!id) return res.status(400).json({ message: "User ID is required" });
+  try {
+    const { id } = req.params;
 
-        const user = await User.findById(id).select("_id name email balance createdAt updatedAt");
-        if (!user) return res.status(404).json({ message: "User not found" });
+    const user = await User.findById(id)
+      .select("_id name email followers following createdAt");
 
-        res.status(200).json({ message: "User found", user });
-    } catch (error) {
-        res.status(500).json({ message: "Internal server error", error: error.message });
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
     }
+
+    res.status(200).json({ user });
+  } catch (error) {
+    res.status(500).json({ message: "Internal server error" });
+  }
 };
+
 
 const updateUserById = async (req, res) => {
     try {
@@ -199,6 +209,50 @@ const searchUsers = async (req, res) => {
   }
 };
 
+const toggleFollow = async (req, res) => {
+  const { id } = req.params;
+  const currentUserId = req.user.id;
+
+  if (id === currentUserId) {
+    return res.status(400).json({ message: "You cannot follow yourself" });
+  }
+
+  const currentUser = await User.findById(currentUserId);
+
+  if (!currentUser) {
+    return res.status(404).json({ message: "User not found" });
+  }
+
+  const isFollowing = currentUser.following.some(
+    (uid) => uid.toString() === id
+  );
+
+  if (isFollowing) {
+    await User.findByIdAndUpdate(currentUserId, {
+      $pull: { following: id },
+    });
+    await User.findByIdAndUpdate(id, {
+      $pull: { followers: currentUserId },
+    });
+  } else {
+    await User.findByIdAndUpdate(currentUserId, {
+      $addToSet: { following: id },
+    });
+    await User.findByIdAndUpdate(id, {
+      $addToSet: { followers: currentUserId },
+    });
+  }
+
+  const updatedTargetUser = await User.findById(id).select("followers");
+
+  res.status(200).json({
+    following: !isFollowing,
+    followersCount: updatedTargetUser.followers.length,
+  });
+};
+
+
+
 
 export {
     registerUser,
@@ -208,5 +262,6 @@ export {
     getUserById,
     updateUserById,
     transferFunds,
-    searchUsers
+    searchUsers,
+    toggleFollow
 };

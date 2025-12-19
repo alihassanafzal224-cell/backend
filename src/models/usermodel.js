@@ -1,4 +1,4 @@
-import mongoose, {Schema} from "mongoose";
+import mongoose, { Schema } from "mongoose";
 import validator from "validator";
 
 const userSchema = new Schema({
@@ -21,7 +21,7 @@ const userSchema = new Schema({
         required: true,
         unique: true,
         trim: true,
-        index : true,
+        index: true,
         lowercase: true,
         validate: [validator.isEmail, "Please provide a valid email address"]
     },
@@ -29,8 +29,21 @@ const userSchema = new Schema({
         type: Number,
         required: true,
         default: 400
-}
+    },
+    followers: {
+        type: [mongoose.Schema.Types.ObjectId],
+        ref: "User",
+        default: [],
+    },
+
+    following: {
+        type: [mongoose.Schema.Types.ObjectId],
+        ref: "User",
+        default: [],
+    },
+
 },
+
     { timestamps: true }
 );
 
