@@ -37,7 +37,8 @@ const createPost = async (req, res) => {
 const getPosts = async (req, res) => {
   try {
     const posts = await Post.find()
-      .populate("user", "username avatar")
+     .populate("user", "_id name avatar")
+
       .sort({ createdAt: -1 });
 
     res.status(200).json(posts);
@@ -52,7 +53,8 @@ const getPosts = async (req, res) => {
 const getUserPosts = async (req, res) => {
   try {
     const userPosts = await Post.find({ user: req.user._id })
-      .populate("user", "username avatar")
+      .populate("user", "_id name avatar")
+
       .sort({ createdAt: -1 });
 
     res.status(200).json(userPosts);
@@ -70,7 +72,8 @@ const getPostsByUserId = async (req, res) => {
     const { userId } = req.params;
 
     const posts = await Post.find({ user: userId })
-      .populate("user", "username avatar")
+      .populate("user", "_id name avatar")
+
       .sort({ createdAt: -1 });
 
     res.status(200).json(posts);
@@ -101,7 +104,8 @@ const updatePost = async (req, res) => {
       req.params.id,
       updates,
       { new: true }
-    ).populate("user", "username avatar");
+    ).populate("user", "_id name avatar")
+
 
     if (!updatedPost) {
       return res.status(404).json({ message: "Post not found" });
