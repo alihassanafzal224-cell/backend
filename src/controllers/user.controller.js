@@ -198,13 +198,14 @@ const searchUsers = async (req, res) => {
       {
         name: { $regex: q, $options: "i" }, // case-insensitive
       },
-      { _id: 1, name: 1 } // only required fields
+      { _id: 1, name: 1 ,avatar: 1} // only required fields
     ).limit(10);
 
     res.status(200).json(
       users.map((u) => ({
         _id: u._id,
         username: u.name,
+        avatar:u.avatar,
       }))
     );
   } catch (error) {
