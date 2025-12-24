@@ -5,6 +5,7 @@ import path from 'path';
 
 import userRoutes from './routes/user.route.js';
 import postRoutes from './routes/post.route.js';
+import statusRoutes from "./routes/status.route.js"
 import { logger, errorHandler, rateLimiter } from '../middleware/index.js';
 
 const app = express();
@@ -27,6 +28,7 @@ app.use(rateLimiter());
 // Routes
 app.use('/api/users', userRoutes);
 app.use('/api/posts', postRoutes);
+app.use('/api/status', statusRoutes);
 
 // Error handler
 app.use(errorHandler);

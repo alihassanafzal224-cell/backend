@@ -4,6 +4,7 @@ import { User } from "../models/usermodel.js";
 import bcrypt from "bcryptjs";
 import validator from "validator";
 
+
 const registerUser = async (req, res) => {
   try {
     const { username, email, password } = req.body;
@@ -100,7 +101,7 @@ const getUserById = async (req, res) => {
     const { id } = req.params;
 
     const user = await User.findById(id)
-      .select("_id name email followers following createdAt");
+      .select("_id name email followers following avatar createdAt");
 
     if (!user) {
       return res.status(404).json({ message: "User not found" });
