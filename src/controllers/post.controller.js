@@ -140,5 +140,47 @@ const deletePost = async (req, res) => {
     });
   }
 };
+/* LIKE / UNLIKE POST */
+const toggleLikePost = async (req, res) => {
+  try {
+    const post = await Post.findById(req.params.id);
+    if (!post) return res.status(404).json({ message: "Post not found" });
 
-export { createPost, getPosts, updatePost, deletePost ,getUserPosts ,getPostsByUserId};
+    const userId = req.user._id;
+    const index = post.likes.indexOf(userId);
+
+    if (index === -1) {
+      post.likes.push(userId); // Like
+    } else {
+      post.likes.splice(index, 1); // Unlike
+    }
+
+    await post.save();
+    res.status(200).json({ likes: post.likes.length, liked: index === -1 });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+/* ADD COMMENT */
+const addComment = async (req, res) => {
+  try {
+    const post = await Post.findById(req.params.id);
+    if (!post) return res.status(404).json({ message: "Post not found" });
+
+    const comment = {
+      user: req.user._id,
+      text: req.body.text,
+    };
+
+    post.comments.push(comment);
+    await post.save();
+    await post.populate("comments.user", "_id name avatar");
+
+    res.status(200).json(post.comments);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+export { createPost, getPosts, updatePost, deletePost ,getUserPosts ,getPostsByUserId,toggleLikePost ,addComment};
