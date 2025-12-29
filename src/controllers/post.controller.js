@@ -36,6 +36,7 @@ const getPosts = async (req, res) => {
   try {
     const posts = await Post.find()
       .populate("user", "_id name avatar")
+      .populate("comments.user", "_id name avatar")
       .sort({ createdAt: -1 });
 
     res.status(200).json(posts);
@@ -48,6 +49,7 @@ const getUserPosts = async (req, res) => {
   try {
     const userPosts = await Post.find({ user: req.user._id })
       .populate("user", "_id name avatar")
+      .populate("comments.user", "_id name avatar")
       .sort({ createdAt: -1 });
 
     res.status(200).json(userPosts);
@@ -61,6 +63,7 @@ const getPostsByUserId = async (req, res) => {
     const { userId } = req.params;
     const posts = await Post.find({ user: userId })
       .populate("user", "_id name avatar")
+      .populate("comments.user", "_id name avatar")
       .sort({ createdAt: -1 });
 
     res.status(200).json(posts);
@@ -147,16 +150,20 @@ const addComment = async (req, res) => {
     const post = await Post.findById(req.params.id);
     if (!post) return res.status(404).json({ message: "Post not found" });
 
-    const comment = { user: req.user._id, text: req.body.text };
-    post.comments.push(comment);
+    post.comments.push({ user: req.user._id, text: req.body.text });
     await post.save();
-    await post.populate("comments.user", "_id name avatar");
 
-    res.status(200).json(post.comments);
+    // populate comments.user
+    const populatedPost = await Post.findById(post._id)
+      .populate("comments.user", "_id name avatar")
+      .populate("user", "_id name avatar"); // optional, for post author
+
+    res.status(200).json(populatedPost.comments);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 };
+
 
 export {
   createPost,
