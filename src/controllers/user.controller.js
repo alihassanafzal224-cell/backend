@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 import { User } from "../models/usermodel.js";
 import bcrypt from "bcryptjs";
 import validator from "validator";
+import cloudinary from "../config/cloudinary.js";
 
 
 const registerUser = async (req, res) => {
@@ -51,7 +52,7 @@ const loginUser = async (req, res) => {
     if (!isMatch) return res.status(400).json({ message: "Invalid credentials" });
 
     const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: "21h" });
-    res.cookie("token", token);
+    res.cookie("token", token, { httpOnly: true, sameSite: "Strict" });
 
     res.status(200).json({
       message: "Login successful",
@@ -65,9 +66,8 @@ const loginUser = async (req, res) => {
         following: user.following || [],
       },
     });
-
   } catch (error) {
-    res.status(500).json({ message: "Internal server error", error: error.message });
+    res.status(500).json({ message: "Internal server error" });
   }
 };
 
@@ -258,22 +258,32 @@ const toggleFollow = async (req, res) => {
 // PUT /api/users/me
 const updateMyProfile = async (req, res) => {
   try {
-    const userId = req.user.id;
+    const userId = req.user._id;
     const { name, bio } = req.body;
 
     const updates = {};
     if (name) updates.name = name;
     if (bio) updates.bio = bio;
-    if (req.file) updates.avatar = `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
 
-    const user = await User.findByIdAndUpdate(
-      userId,
-      updates,
-      { new: true }
-    ).select("_id name email avatar bio followers following");
+    // If an avatar file is uploaded, upload it to Cloudinary
+    if (req.file) {
+      const result = await new Promise((resolve, reject) => {
+        const upload = cloudinary.uploader.upload_stream(
+          { folder: "avatars", resource_type: "auto" },
+          (error, result) => (error ? reject(error) : resolve(result))
+        );
+        upload.end(req.file.buffer);
+      });
 
-    res.status(200).json({ user });
+      updates.avatar = result.secure_url;
+    }
+
+    const updatedUser = await User.findByIdAndUpdate(userId, updates, { new: true })
+      .select("_id name email avatar bio followers following");
+
+    res.status(200).json({ message: "Profile updated successfully", user: updatedUser });
   } catch (err) {
+    console.error("Profile update error:", err);
     res.status(500).json({ message: "Profile update failed" });
   }
 };
