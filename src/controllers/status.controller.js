@@ -16,6 +16,7 @@ const createStatus = async (req, res) => {
           caption: req.body.caption || "",
           media: result.secure_url,
           mediaType: result.resource_type,
+          publicId: result.public_id,
         });
 
         await newStatus.populate("user", "_id name avatar");
@@ -24,7 +25,6 @@ const createStatus = async (req, res) => {
     );
 
     upload.end(req.file.buffer);
-
   } catch (error) {
     res.status(500).json({ message: "Error creating status", error: error.message });
   }
@@ -78,9 +78,13 @@ const deleteStatus = async (req, res) => {
     if (status.user.toString() !== req.user._id.toString())
       return res.status(403).json({ message: "Unauthorized to delete this status" });
 
+    // Delete from Cloudinary
+    if (status.publicId) {
+      await cloudinary.uploader.destroy(status.publicId, { resource_type: status.mediaType });
+    }
+
     await Status.findByIdAndDelete(req.params.statusId);
     res.status(200).json({ message: "Status deleted successfully", statusId: req.params.statusId });
-
   } catch (error) {
     res.status(500).json({ message: "Error deleting status", error: error.message });
   }

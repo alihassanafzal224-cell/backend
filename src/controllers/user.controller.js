@@ -6,7 +6,8 @@ import validator from "validator";
 import cloudinary from "../config/cloudinary.js";
 import crypto from "crypto";
 import nodemailer from "nodemailer";
-import {sendVerificationEmail} from "../utils/mail.js"
+import { sendVerificationEmail } from "../utils/mail.js"
+import { sendResetPasswordEmail } from "../utils/mail.js";
 
 const registerUser = async (req, res) => {
   try {
@@ -19,8 +20,8 @@ const registerUser = async (req, res) => {
     if (existingUser) return res.status(400).json({ message: "Username or email already exists" });
 
     const hashedPassword = await bcrypt.hash(password, 10);
-      const token = crypto.randomBytes(20).toString('hex');
-    const newUser = await User.create({ name: username, email, password: hashedPassword,token: token, emailVerified: false  });
+    const token = crypto.randomBytes(20).toString('hex');
+    const newUser = await User.create({ name: username, email, password: hashedPassword, token: token, emailVerified: false });
 
     // Send verification email
     await sendVerificationEmail(newUser, token);
@@ -46,7 +47,7 @@ const loginUser = async (req, res) => {
     if (!user.emailVerified) {
       return res.status(400).json({ message: "Please verify your email before logging in" });
     }
-    if(!user.emailVerified) {
+    if (!user.emailVerified) {
       return res.status(400).json({ message: "Please verify your email before logging in" });
     }
     const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: "21h" });
@@ -85,14 +86,22 @@ const verifyEmail = async (req, res) => {
   }
 };
 
+// Logout user
 const logoutUser = async (req, res) => {
   try {
-    res.clearCookie("token");
+    // Clear cookie properly
+    res.clearCookie("token", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production", // only for HTTPS
+      sameSite: "Strict",
+    });
+
     res.status(200).json({ message: "Logout successful" });
   } catch (error) {
     res.status(500).json({ message: "Internal server error", error: error.message });
   }
 };
+
 
 const getAllUsers = async (req, res) => {
   try {
@@ -240,9 +249,18 @@ const toggleFollow = async (req, res) => {
     return res.status(404).json({ message: "User not found" });
   }
 
+
   const isFollowing = currentUser.following.some(
     (uid) => uid.toString() === id
   );
+  if (targetUserId !== req.user._id.toString()) {
+    await Notification.create({
+      recipient: targetUserId,
+      sender: req.user._id,
+      type: "follow",
+    });
+  }
+
 
   if (isFollowing) {
     await User.findByIdAndUpdate(currentUserId, {
@@ -380,6 +398,71 @@ const loginWithOtp = async (req, res) => {
   }
 };
 
+const forgotPassword = async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    const user = await User.findOne({ email });
+    if (!user)
+      return res.status(404).json({ message: "User not found" });
+
+    const resetToken = crypto.randomBytes(32).toString("hex");
+    console.log("Generated token:", resetToken);
+    user.resetPasswordToken = crypto
+      .createHash("sha256")
+      .update(resetToken)
+      .digest("hex");
+
+    user.resetPasswordExpires = Date.now() + 15 * 60 * 1000; // 15 min
+    await user.save();
+
+    await sendResetPasswordEmail(user.email, resetToken);
+
+    res.status(200).json({ message: "Password reset link sent to email" });
+  } catch (err) {
+    res.status(500).json({ message: "Forgot password failed" });
+  }
+};
+
+const resetPassword = async (req, res) => {
+  try {
+    const { token } = req.params; // get token string
+    const { password } = req.body;
+
+    if (!token || typeof token !== "string") {
+      return res.status(400).json({ message: "Invalid or missing token" });
+    }
+    if (!password || typeof password !== "string") {
+      return res.status(400).json({ message: "Password is required" });
+    }
+
+    // Hash token
+    const hashedToken = crypto
+      .createHash("sha256")
+      .update(token)
+      .digest("hex");
+
+    // Find user
+    const user = await User.findOne({
+      resetPasswordToken: hashedToken,
+      resetPasswordExpires: { $gt: Date.now() },
+    });
+
+    if (!user) return res.status(400).json({ message: "Invalid or expired token" });
+
+    // Update password
+    user.password = await bcrypt.hash(password, 10);
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpires = undefined;
+    await user.save();
+
+    res.status(200).json({ message: "Password reset successful" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Reset password failed", code: err.code });
+  }
+};
+
 
 
 export {
@@ -395,5 +478,7 @@ export {
   updateMyProfile,
   sendEmailOtp,
   loginWithOtp,
-  verifyEmail
+  verifyEmail,
+  forgotPassword,
+  resetPassword
 };
