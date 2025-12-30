@@ -4,43 +4,35 @@ import { User } from "../models/usermodel.js";
 import bcrypt from "bcryptjs";
 import validator from "validator";
 import cloudinary from "../config/cloudinary.js";
-
+import crypto from "crypto";
+import nodemailer from "nodemailer";
+import {sendVerificationEmail} from "../utils/mail.js"
 
 const registerUser = async (req, res) => {
   try {
     const { username, email, password } = req.body;
     if (!username || !email || !password) {
-      return res.status(400).json({ message: "Username, email and password are required" });
+      return res.status(400).json({ message: "Username, email, and password are required" });
     }
-    const existingUser = await User.findOne({
-      $or: [{ name: username }, { email }]
-    });
 
-    if (existingUser) {
-      return res.status(400).json({
-        message: "Username or email already exists"
-      });
-    }
+    const existingUser = await User.findOne({ $or: [{ name: username }, { email }] });
+    if (existingUser) return res.status(400).json({ message: "Username or email already exists" });
 
     const hashedPassword = await bcrypt.hash(password, 10);
+      const token = crypto.randomBytes(20).toString('hex');
+    const newUser = await User.create({ name: username, email, password: hashedPassword,token: token, emailVerified: false  });
 
-    const newUser = await User.create({
-      name: username,
-      email,
-      password: hashedPassword,
-      logedIn: false,
-      balance: 0,
-    });
+    // Send verification email
+    await sendVerificationEmail(newUser, token);
 
     res.status(201).json({
-      message: "User created successfully",
-      newUser: { id: newUser._id, email: newUser.email, username: newUser.name, balance: newUser.balance },
+      message: "User created successfully. Please verify your email.",
+      newUser: { id: newUser._id, email: newUser.email, username: newUser.name },
     });
   } catch (error) {
     res.status(500).json({ message: "Error creating user", error: error.message });
   }
 };
-
 
 const loginUser = async (req, res) => {
   try {
@@ -51,6 +43,12 @@ const loginUser = async (req, res) => {
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) return res.status(400).json({ message: "Invalid credentials" });
 
+    if (!user.emailVerified) {
+      return res.status(400).json({ message: "Please verify your email before logging in" });
+    }
+    if(!user.emailVerified) {
+      return res.status(400).json({ message: "Please verify your email before logging in" });
+    }
     const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: "21h" });
     res.cookie("token", token, { httpOnly: true, sameSite: "Strict" });
 
@@ -71,6 +69,21 @@ const loginUser = async (req, res) => {
   }
 };
 
+const verifyEmail = async (req, res) => {
+  try {
+    const { token } = req.params;
+    const user = await User.findOne({ token });
+    if (!user) return res.status(400).json({ message: "Invalid verification token" });
+
+    user.emailVerified = true;
+    user.token = undefined;
+    await user.save();
+
+    res.status(200).json({ message: "Email verified successfully" });
+  } catch (error) {
+    res.status(500).json({ message: "Error verifying email", error: error.message });
+  }
+};
 
 const logoutUser = async (req, res) => {
   try {
@@ -198,14 +211,14 @@ const searchUsers = async (req, res) => {
       {
         name: { $regex: q, $options: "i" }, // case-insensitive
       },
-      { _id: 1, name: 1 ,avatar: 1} // only required fields
+      { _id: 1, name: 1, avatar: 1 } // only required fields
     ).limit(10);
 
     res.status(200).json(
       users.map((u) => ({
         _id: u._id,
         username: u.name,
-        avatar:u.avatar,
+        avatar: u.avatar,
       }))
     );
   } catch (error) {
@@ -288,6 +301,85 @@ const updateMyProfile = async (req, res) => {
   }
 };
 
+const sendEmailOtp = async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ message: "Email required" });
+
+    const otp = crypto.randomInt(100000, 999999).toString();
+
+    await Otp.deleteMany({ email });
+
+    await Otp.create({
+      email,
+      otp,
+      expiresAt: new Date(Date.now() + 5 * 60 * 1000)
+    });
+
+    const transporter = nodemailer.createTransport({
+      service: "gmail",
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS
+      }
+    });
+
+    await transporter.sendMail({
+      to: email,
+      subject: "Your Insta Clone Login OTP",
+      text: `Your OTP is ${otp}. It expires in 5 minutes.`
+    });
+
+    res.status(200).json({ message: "OTP sent to email" });
+  } catch (err) {
+    res.status(500).json({ message: "Failed to send OTP" });
+  }
+};
+
+const loginWithOtp = async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+
+    const record = await Otp.findOne({ email, otp });
+    if (!record || record.expiresAt < Date.now()) {
+      return res.status(400).json({ message: "Invalid or expired OTP" });
+    }
+
+    let user = await User.findOne({ email });
+    if (!user) {
+      user = await User.create({
+        email,
+        name: email.split("@")[0],
+        logedIn: false,
+        balance: 0
+      });
+    }
+
+    await Otp.deleteMany({ email });
+
+    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
+      expiresIn: "21h"
+    });
+
+    res.cookie("token", token, { httpOnly: true, sameSite: "Strict" });
+
+    res.status(200).json({
+      message: "Login successful",
+      user: {
+        _id: user._id,
+        username: user.name,
+        email: user.email,
+        avatar: user.avatar || "/default-avatar.png",
+        bio: user.bio || "",
+        followers: user.followers || [],
+        following: user.following || []
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ message: "OTP login failed" });
+  }
+};
+
 
 
 export {
@@ -300,5 +392,8 @@ export {
   transferFunds,
   searchUsers,
   toggleFollow,
-  updateMyProfile
+  updateMyProfile,
+  sendEmailOtp,
+  loginWithOtp,
+  verifyEmail
 };
