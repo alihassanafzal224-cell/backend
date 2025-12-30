@@ -17,6 +17,7 @@ const createPost = async (req, res) => {
           caption,
           image: result.secure_url,
           mediaType: result.resource_type,
+          publicId: result.public_id,
           user: req.user._id,
         });
 
@@ -25,13 +26,12 @@ const createPost = async (req, res) => {
     );
 
     upload.end(req.file.buffer);
-
   } catch (error) {
     res.status(500).json({ message: "Error creating post", error: error.message });
   }
 };
 
-/* GET POSTS */
+/* GET ALL POSTS */
 const getPosts = async (req, res) => {
   try {
     const posts = await Post.find()
@@ -45,6 +45,7 @@ const getPosts = async (req, res) => {
   }
 };
 
+/* GET USER POSTS */
 const getUserPosts = async (req, res) => {
   try {
     const userPosts = await Post.find({ user: req.user._id })
@@ -58,6 +59,7 @@ const getUserPosts = async (req, res) => {
   }
 };
 
+/* GET POSTS BY USER ID */
 const getPostsByUserId = async (req, res) => {
   try {
     const { userId } = req.params;
@@ -87,6 +89,7 @@ const updatePost = async (req, res) => {
 
           updates.image = result.secure_url;
           updates.mediaType = result.resource_type;
+          updates.publicId = result.public_id;
 
           const updatedPost = await Post.findByIdAndUpdate(req.params.id, updates, { new: true })
             .populate("user", "_id name avatar");
@@ -106,7 +109,6 @@ const updatePost = async (req, res) => {
     if (!updatedPost) return res.status(404).json({ message: "Post not found" });
 
     res.status(200).json({ message: "Post updated successfully", updatedPost });
-
   } catch (error) {
     res.status(500).json({ message: "Error updating post", error: error.message });
   }
@@ -115,9 +117,15 @@ const updatePost = async (req, res) => {
 /* DELETE POST */
 const deletePost = async (req, res) => {
   try {
-    const post = await Post.findByIdAndDelete(req.params.id);
+    const post = await Post.findById(req.params.id);
     if (!post) return res.status(404).json({ message: "Post not found" });
 
+    // Delete from Cloudinary
+    if (post.publicId) {
+      await cloudinary.uploader.destroy(post.publicId, { resource_type: post.mediaType });
+    }
+
+    await Post.findByIdAndDelete(req.params.id);
     res.status(200).json({ message: "Post deleted successfully" });
   } catch (error) {
     res.status(500).json({ message: "Error deleting post", error: error.message });
@@ -138,7 +146,6 @@ const toggleLikePost = async (req, res) => {
 
     await post.save();
     res.status(200).json({ likes: post.likes.length, liked: index === -1 });
-
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -153,10 +160,9 @@ const addComment = async (req, res) => {
     post.comments.push({ user: req.user._id, text: req.body.text });
     await post.save();
 
-    // populate comments.user
     const populatedPost = await Post.findById(post._id)
       .populate("comments.user", "_id name avatar")
-      .populate("user", "_id name avatar"); // optional, for post author
+      .populate("user", "_id name avatar");
 
     res.status(200).json(populatedPost.comments);
   } catch (error) {
@@ -164,14 +170,13 @@ const addComment = async (req, res) => {
   }
 };
 
-
 export {
   createPost,
   getPosts,
-  updatePost,
-  deletePost,
   getUserPosts,
   getPostsByUserId,
+  updatePost,
+  deletePost,
   toggleLikePost,
   addComment,
 };
