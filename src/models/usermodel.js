@@ -1,4 +1,5 @@
 import mongoose, { Schema } from "mongoose";
+import { type } from "os";
 import validator from "validator";
 
 const userSchema = new Schema(
@@ -40,15 +41,17 @@ const userSchema = new Schema(
       type: Boolean,
       default: false,
     },
-    token:{
+    token: {
       type: String,
     },
     emailVerificationToken: String,
     emailVerificationExpires: Date,
 
-    // Password reset
-    resetPasswordToken: String,
-    resetPasswordExpires: Date,
+    resetPasswordToken:{
+      type: String,
+    } ,
+    resetPasswordExpires:{ type: Date },
+
   },
   { timestamps: true }
 );

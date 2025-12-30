@@ -14,6 +14,11 @@ const postSchema = new Schema(
       trim: true,
     },
 
+    publicId: {          // <-- Add this for Cloudinary deletion
+      type: String,
+      required: true,
+    },
+
     caption: {
       type: String,
       trim: true,

@@ -13,7 +13,9 @@ import {
     updateMyProfile,
     sendEmailOtp,
     loginWithOtp,
-    verifyEmail
+    verifyEmail,
+    resetPassword,
+    forgotPassword,
 } from "../controllers/user.controller.js";
 import { upload } from '../../middleware/upload.js'; 
 import { User } from "../models/usermodel.js";
@@ -30,6 +32,12 @@ router.post("/auth/send-otp", sendEmailOtp);
 router.post("/auth/login-otp", loginWithOtp);
 // verify email route
  router.get("/verify/:token", verifyEmail);
+
+ // forget password routes
+router.post("/forgot-password", forgotPassword);
+router.post("/reset-password/:token", resetPassword);
+
+
 
 // ---------- Other Routes ----------
 router.get("/search", auth, searchUsers);

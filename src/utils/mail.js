@@ -28,6 +28,21 @@ transporter.verify((err) => {
   });
 };
 
+export const sendResetPasswordEmail = async (email, token) => {
+  const resetUrl = `http://localhost:5173/reset-password/${token}`;
+
+  return transporter.sendMail({
+    to: email,
+    subject: "Reset Your Password",
+    html: `
+      <p>You requested a password reset</p>
+      <a href="${resetUrl}">Reset Password</a>
+      <p>This link expires in 15 minutes.</p>
+    `,
+  });
+};
+
+
 
 
 
