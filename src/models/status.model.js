@@ -18,7 +18,7 @@ const statusSchema = new mongoose.Schema(
       required: true
     },
 
-    publicId: {        // <-- Add this for Cloudinary deletion
+    publicId: {    
       type: String,
       required: true
     },

@@ -50,6 +50,7 @@ const loginUser = async (req, res) => {
     if (!user.emailVerified) {
       return res.status(400).json({ message: "Please verify your email before logging in" });
     }
+  
     const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: "21h" });
     res.cookie("token", token, { httpOnly: true, sameSite: "Strict" });
 
