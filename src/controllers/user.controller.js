@@ -250,18 +250,9 @@ const toggleFollow = async (req, res) => {
     return res.status(404).json({ message: "User not found" });
   }
 
-
   const isFollowing = currentUser.following.some(
     (uid) => uid.toString() === id
   );
-  if (targetUserId !== req.user._id.toString()) {
-    await Notification.create({
-      recipient: targetUserId,
-      sender: req.user._id,
-      type: "follow",
-    });
-  }
-
 
   if (isFollowing) {
     await User.findByIdAndUpdate(currentUserId, {
@@ -286,7 +277,6 @@ const toggleFollow = async (req, res) => {
     followersCount: updatedTargetUser.followers.length,
   });
 };
-
 // PUT /api/users/me
 const updateMyProfile = async (req, res) => {
   try {
