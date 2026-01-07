@@ -8,62 +8,55 @@ export const initSocket = (io) => {
   io.use(socketAuth);
 
   io.on("connection", (socket) => {
-    console.log(socket.id)
     const userId = socket.user._id.toString();
     onlineUsers.set(userId, socket.id);
-    console.log("onlineusers", onlineUsers)
-    // Each user has a private room = userId
-    socket.join(userId);
 
+    socket.join(userId);
     io.emit("online-users", [...onlineUsers.keys()]);
 
-    // Join a conversation room
-    socket.on("join-conversation", (conversationId) => {
+    // JOIN CONVERSATION (mark messages as seen)
+    socket.on("join-conversation", async (conversationId) => {
       socket.join(conversationId);
+
+      await Message.updateMany(
+        {
+          conversationId,
+          sender: { $ne: socket.user._id },
+          seenBy: { $ne: socket.user._id }
+        },
+        { $push: { seenBy: socket.user._id } }
+      );
+
+      socket.to(conversationId).emit("messages-seen", {
+        conversationId,
+        userId: socket.user._id
+      });
     });
 
-    // Send message
+    // SEND MESSAGE
     socket.on("send-message", async ({ conversationId, text }) => {
-      const senderId = socket.user._id;
-
       const message = await Message.create({
         conversationId,
-        sender: senderId,
-        text
+        sender: socket.user._id,
+        text,
+        seenBy: [socket.user._id] // sender has seen it
       });
-   
 
-     // 🔥 Update conversation order
       await Conversation.findByIdAndUpdate(conversationId, {
         lastMessage: message._id,
         updatedAt: new Date()
       });
-      // Seen message
-      socket.on("seen-message", async ({ conversationId }) => {
-        await Message.updateMany(
-          {
-            conversationId,
-            seenBy: { $ne: socket.user._id }
-          },
-          { $push: { seenBy: socket.user._id } }
-        );
 
-        socket.to(conversationId).emit("message-seen", {
-          userId: socket.user._id
-        });
-      });
-
-      const populatedMessage = await message.populate("sender", "username avatar");
+      const populatedMessage = await message.populate(
+        "sender",
+        "username avatar"
+      );
 
       io.to(conversationId).emit("new-message", populatedMessage);
     });
 
-
-
     socket.on("disconnect", () => {
-      console.log("user logedout", userId)
       onlineUsers.delete(userId);
-      console.log("onlineusers", onlineUsers)
       io.emit("online-users", [...onlineUsers.keys()]);
     });
   });
