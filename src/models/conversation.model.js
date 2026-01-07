@@ -9,5 +9,6 @@ const ConversationSchema = new mongoose.Schema(
   },
   { timestamps: true } // createdAt, updatedAt
 );
-
+ConversationSchema.index({ participants: 1 });
+ConversationSchema.index({ updatedAt: -1 });
 export default mongoose.model("Conversation", ConversationSchema);

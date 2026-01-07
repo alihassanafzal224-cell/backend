@@ -19,5 +19,5 @@ const MessageSchema = new mongoose.Schema(
   },
   { timestamps: true } // createdAt = sent time, updatedAt = edited
 );
-
+MessageSchema.index({ conversationId: 1, createdAt: -1 });
 export default mongoose.model("Message", MessageSchema);
