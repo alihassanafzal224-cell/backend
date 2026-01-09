@@ -1,14 +1,20 @@
 import Conversation from "../models/conversation.model.js";
 
-const getConversations = async (req, res) => {
+export const getConversations = async (req, res) => {
   try {
     const userId = req.user._id;
 
     const conversations = await Conversation.find({
       participants: userId
     })
-      .populate("participants", "username avatar")
-      .populate("lastMessage")
+      .populate("participants", "name avatar username")
+      .populate({
+        path: "lastMessage",
+        populate: {
+          path: "sender",
+          select: "name avatar username"
+        }
+      })
       .sort({ updatedAt: -1 });
 
     res.status(200).json(conversations);
@@ -18,7 +24,7 @@ const getConversations = async (req, res) => {
   }
 };
 
-const createConversation = async (req, res) => {
+export const createConversation = async (req, res) => {
   try {
     const myId = req.user._id;
     const otherUserId = req.params.userId;
@@ -31,7 +37,7 @@ const createConversation = async (req, res) => {
 
     let conversation = await Conversation.findOne({
       participants: { $all: [myId, otherUserId] }
-    }).populate("participants", "username avatar");
+    }).populate("participants", "name avatar username");
 
     if (conversation) {
       return res.status(200).json(conversation);
@@ -43,7 +49,7 @@ const createConversation = async (req, res) => {
 
     conversation = await conversation.populate(
       "participants",
-      "username avatar"
+      "name avatar username"
     );
 
     res.status(201).json(conversation);
@@ -51,9 +57,4 @@ const createConversation = async (req, res) => {
     console.error(err);
     res.status(500).json({ message: "Server error" });
   }
-};
-
-export {
-  getConversations,
-  createConversation
 };
