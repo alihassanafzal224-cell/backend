@@ -3,31 +3,29 @@ import Conversation from "../models/conversation.model.js";
 import cloudinary from "../config/cloudinary.js";
 import { getIO } from "../utils/socketInstance.js";
 
+/* ---------------- GET MESSAGES ---------------- */
 export const getMessages = async (req, res) => {
   try {
-    const userId = req.user._id;
+    const userId = req.user._id.toString();
     const { conversationId } = req.params;
 
     const page = parseInt(req.query.page) || 1;
     const limit = 30;
 
-    // 1️⃣ Check access FIRST
+    // Check access
     const conversation = await Conversation.findOne({
       _id: conversationId,
       participants: userId
     });
 
-    if (!conversation) {
-      return res.status(403).json({ message: "Access denied" });
-    }
+    if (!conversation) return res.status(403).json({ message: "Access denied" });
 
-    // 2️⃣ Fetch paginated messages
+    // Fetch messages
     const messages = await Message.find({ conversationId })
-      .sort({ createdAt: -1 })
+      .sort({ createdAt: 1 }) // ascending
       .skip((page - 1) * limit)
       .limit(limit)
-      .populate("sender", "name avatar username")
-      .sort({ createdAt: 1 });
+      .populate("sender", "name avatar username");
 
     res.status(200).json(messages);
   } catch (err) {
@@ -36,56 +34,42 @@ export const getMessages = async (req, res) => {
   }
 };
 
-/* SEND MESSAGE */
+/* ---------------- SEND MESSAGE ---------------- */
 export const sendMessage = async (req, res) => {
   try {
-    const userId = req.user._id;
+    const userId = req.user._id.toString();
     const { conversationId } = req.params;
     const { text, tempId } = req.body;
 
-    // 1️⃣ Check conversation access
+    const io = getIO();
+
     const conversation = await Conversation.findOne({
       _id: conversationId,
       participants: userId
-    }).populate("participants", "name avatar");
+    }).populate("participants", "_id name avatar username");
 
-    if (!conversation) {
-      return res.status(403).json({ message: "Access denied" });
-    }
+    if (!conversation) return res.status(403).json({ message: "Access denied" });
 
-    // 2️⃣ Upload media (if exists)
+    // Upload media
     let mediaUrls = [];
-
-    if (req.files && req.files.length > 0) {
-      const uploads = req.files.map(file => {
-        return new Promise((resolve, reject) => {
-          const upload = cloudinary.uploader.upload_stream(
-            {
-              resource_type: "auto",
-              folder: "messages",
-              transformation: [
-                { width: 1000, height: 1000, crop: "limit" },
-                { quality: "auto" }
-              ]
-            },
-            (error, result) => {
-              if (error) reject(error);
-              else resolve(result.secure_url);
-            }
-          );
-
-          upload.end(file.buffer);
-        });
-      });
-
-      mediaUrls = await Promise.all(uploads);
+    if (req.files?.length) {
+      mediaUrls = await Promise.all(
+        req.files.map(
+          file =>
+            new Promise((resolve, reject) => {
+              cloudinary.uploader.upload_stream(
+                { resource_type: "auto", folder: "messages" },
+                (err, result) => (err ? reject(err) : resolve(result.secure_url))
+              ).end(file.buffer);
+            })
+        )
+      );
     }
 
-    if (!text && mediaUrls.length === 0) {
+    if (!text && mediaUrls.length === 0)
       return res.status(400).json({ message: "Message cannot be empty" });
-    }
 
-    // 3️⃣ Create message
+    // Create message
     const message = await Message.create({
       conversationId,
       sender: userId,
@@ -94,33 +78,46 @@ export const sendMessage = async (req, res) => {
       seenBy: [userId]
     });
 
-    // 4️⃣ Update conversation lastMessage
+    const room = io.sockets.adapter.rooms.get(conversationId);
+
+    // Update unread counts for other participants
+    conversation.participants.forEach(p => {
+      const pid = p._id.toString();
+      if (pid === userId) return; // skip sender
+
+      const isInRoom =
+        room &&
+        [...room].some(sid => io.sockets.sockets.get(sid)?.user?._id.toString() === pid);
+
+      if (!isInRoom) {
+        const current = conversation.unreadCounts.get(pid) || 0;
+        conversation.unreadCounts.set(pid, current + 1);
+
+        // Notify only the specific user
+        io.to(pid).emit("conversation-unread-update", {
+          conversationId,
+          unreadCount: current + 1
+        });
+      }
+    });
+
+    // Reset sender's unread
+    conversation.unreadCounts.set(userId, 0);
     conversation.lastMessage = message._id;
     conversation.updatedAt = new Date();
     await conversation.save();
 
-    // 5️⃣ Populate sender
-    const populatedMessage = await message.populate(
-      "sender",
-      "name avatar username"
-    );
+    const populatedMessage = await message.populate("sender", "name avatar username");
 
-    // 6️⃣ Emit socket event for real-time update
-    const io = getIO();
+    // Emit message to everyone in conversation
     io.to(conversationId).emit("new-message", {
       ...populatedMessage.toObject(),
-      tempId // Include tempId for frontend to replace
-    });
-
-    // 7️⃣ Emit event for media upload completion
-    io.to(conversationId).emit("message-uploaded", {
-      conversationId,
-      messageId: message._id
+      tempId
     });
 
     res.status(201).json({
       ...populatedMessage.toObject(),
-      tempId // Return tempId to frontend
+      tempId
     });
   } catch (err) {
     console.error("Send message error:", err);
